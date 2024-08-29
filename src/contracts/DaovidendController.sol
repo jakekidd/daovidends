@@ -14,22 +14,19 @@ import "./DaovidendRewards.sol";
  * the DAO, providing decentralized governance over the deployment and management of these contracts.
  */
 contract DaovidendController is Ownable {
-    address public immutable DAO;
     Daovidends public daovidends;
-    DaovidendRewards public daovidendRewards;
+    DaovidendRewards public rewards;
     bool public deployed;
 
-    event ContractsDeployed(address indexed daovidends, address indexed daovidendRewards);
-    event RewardsContractUpdated(address indexed daovidends, address indexed oldRewardsContract, address indexed newRewardsContract);
+    event ContractsDeployed(address indexed daovidends, address indexed rewards);
+    event RewardsContractUpdated(
+        address indexed daovidends,
+        address indexed oldRewardsContract,
+        address indexed newRewardsContract
+    );
+    event TokenAllowlistUpdated(address indexed rewardsContract, IERC20 indexed token, bool allowed);
 
-    constructor(address _dao) Ownable(msg.sender) {
-        DAO = _dao;
-    }
-
-    modifier onlyDAO() {
-        require(msg.sender == DAO, "Caller is not the DAO");
-        _;
-    }
+    constructor(address _dao) Ownable(_dao) {}
 
     /**
      * @notice Deploys the Daovidends and DaovidendRewards contracts with the same configuration.
@@ -44,8 +41,8 @@ contract DaovidendController is Ownable {
         uint256 _blocksPerQuarter,
         uint256 _originBlock,
         uint256 _claimPeriod
-    ) external onlyDAO {
-        require(!deployed, "Contracts have already been deployed");
+    ) external onlyOwner {
+        require(!deployed, "Contracts have already been deployed.");
 
         // Deploy the Daovidends contract.
         daovidends = new Daovidends(
@@ -57,20 +54,18 @@ contract DaovidendController is Ownable {
         );
 
         // Deploy the DaovidendRewards contract with the correct configuration.
-        daovidendRewards = new DaovidendRewards(
-            _blocksPerQuarter,
-            _originBlock,
-            _claimPeriod,
+        rewards = new DaovidendRewards(
+            address(this),
             address(daovidends)
         );
 
         // Set the rewards contract in the Daovidends contract.
-        daovidends.setRewardsContract(daovidendRewards);
+        daovidends.setRewardsContract(rewards);
 
         // Mark the deployment as complete.
         deployed = true;
 
-        emit ContractsDeployed(address(daovidends), address(daovidendRewards));
+        emit ContractsDeployed(address(daovidends), address(rewards));
     }
 
     /**
@@ -83,23 +78,34 @@ contract DaovidendController is Ownable {
         uint256 _blocksPerQuarter,
         uint256 _originBlock,
         uint256 _claimPeriod
-    ) external onlyDAO {
-        require(deployed, "Contracts must be deployed first");
+    ) external onlyOwner {
+        require(deployed, "Contracts must be deployed first.");
 
         // Deploy a new DaovidendRewards contract with the same configuration.
         DaovidendRewards newRewards = new DaovidendRewards(
-            _blocksPerQuarter,
-            _originBlock,
-            _claimPeriod,
+            address(this),
             address(daovidends)
         );
 
         // Get the old rewards contract for logging.
-        DaovidendRewards oldRewards = daovidends.rewardsContract();
+        DaovidendRewards oldRewards = rewards;
 
         // Update the rewards contract in the Daovidends contract.
         daovidends.setRewardsContract(newRewards);
 
+        // Update the reference in the controller.
+        rewards = newRewards;
+
         emit RewardsContractUpdated(address(daovidends), address(oldRewards), address(newRewards));
+    }
+
+    /**
+     * @notice Updates the token allowlist in the specified rewards contract.
+     * @param token The ERC20 token to update.
+     * @param allowed Whether the token is allowed (true) or disallowed (false).
+     */
+    function updateTokenAllowlist(IERC20 token, bool allowed) external onlyOwner {
+        rewards.updateTokenAllowlist(token, allowed);
+        emit TokenAllowlistUpdated(address(rewards), token, allowed);
     }
 }

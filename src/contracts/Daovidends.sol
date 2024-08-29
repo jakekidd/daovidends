@@ -3,9 +3,16 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "./Quarterly.sol";
+import "../utils/Quarterly.sol";
 import "./DaovidendRewards.sol";
 
+/**
+ * @title Daovidends
+ * @dev This contract allows users to stake DAO governance tokens and claim quarterly rewards based on their
+ * staking duration and amount. It tracks user stakes, calculates rewards, and integrates with the DaovidendRewards
+ * contract to distribute rewards. The contract is managed by a central controller (DaovidendController), ensuring
+ * consistent and secure updates.
+ */
 contract Daovidends is Quarterly, Ownable {
     /// @notice The DAO governance token that users stake.
     IERC20 public immutable DAO_TOKEN;
@@ -51,6 +58,15 @@ contract Daovidends is Quarterly, Ownable {
         address _owner
     ) Quarterly(_blocksPerQuarter, _originBlock, _claimPeriod) Ownable(_owner) {
         DAO_TOKEN = _daoToken;
+    }
+
+    /**
+     * @notice Modifier to check if the claim period is active for the current quarter.
+     */
+    modifier claimPeriodActive() {
+        (, , uint256 quarterEndBlock) = _getCurrentQuarter();
+        if (block.number > quarterEndBlock - (BLOCKS_PER_QUARTER / 2)) revert ClaimPeriodHasEnded();
+        _;
     }
 
     /**
@@ -114,7 +130,8 @@ contract Daovidends is Quarterly, Ownable {
         uint256 reducedProjectedCredits = blocksRemaining * (stakers[msg.sender].amount - amount);
 
         // Update projected total credits.
-        projectedTotalCredits[currentQuarter] = projectedTotalCredits[currentQuarter] - currentProjectedCredits + reducedProjectedCredits;
+        projectedTotalCredits[currentQuarter] =
+            projectedTotalCredits[currentQuarter] - currentProjectedCredits + reducedProjectedCredits;
         stakers[msg.sender].projected = reducedProjectedCredits;
 
         stakers[msg.sender].amount -= amount;
@@ -134,13 +151,12 @@ contract Daovidends is Quarterly, Ownable {
     /**
      * @notice Claim rewards for the current quarter.
      */
-    function claim() external {
+    function claim() external claimPeriodActive {
         if (address(rewardsContract) == address(0)) revert RewardsContractNotSet();
 
-        (uint256 currentQuarter, uint256 quarterStartBlock, uint256 quarterEndBlock) = _getCurrentQuarter();
+        (uint256 currentQuarter, uint256 quarterStartBlock, ) = _getCurrentQuarter();
 
         if (claims[msg.sender][currentQuarter]) revert RewardsAlreadyClaimed();
-        if (block.number > quarterEndBlock - (BLOCKS_PER_QUARTER / 2)) revert ClaimPeriodHasEnded();
 
         _update(msg.sender, currentQuarter, quarterStartBlock);
 
@@ -149,9 +165,19 @@ contract Daovidends is Quarterly, Ownable {
 
         claims[msg.sender][currentQuarter] = true;
 
-        rewardsContract.distribute(rewardPercentage, msg.sender);
+        rewardsContract.distribute(rewardPercentage, msg.sender, currentQuarter);
 
         emit RewardsClaimed(msg.sender, rewardPercentage);
+    }
+
+    /**
+     * @notice Roll over unclaimed tokens from the previous quarter to the current quarter's pool.
+     */
+    function rollover() external {
+        (uint256 currentQuarter, , ) = _getCurrentQuarter();
+        uint256 previousQuarter = currentQuarter - 1;
+
+        rewardsContract.rollover(currentQuarter, previousQuarter);
     }
 
     /**
@@ -162,7 +188,7 @@ contract Daovidends is Quarterly, Ownable {
      */
     function _update(address user, uint256 currentQuarter, uint256 quarterStartBlock) internal {
         Stake storage info = stakers[user];
-        uint256 userStartQuarter = ((info.start - QUARTER_START_BLOCK) / BLOCKS_PER_QUARTER) + 1;
+        uint256 userStartQuarter = ((info.start - ORIGIN_BLOCK) / BLOCKS_PER_QUARTER) + 1;
 
         if (userStartQuarter < currentQuarter) {
             // Calculate credits as if the start block was the start of the current quarter.
