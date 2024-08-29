@@ -70,15 +70,8 @@ contract DaovidendController is Ownable {
 
     /**
      * @notice Updates the rewards contract with a new instance.
-     * @param _blocksPerQuarter The number of blocks per quarter.
-     * @param _originBlock The block number when the first quarter starts.
-     * @param _claimPeriod The number of blocks during which rewards can be claimed each quarter.
      */
-    function updateRewardsContract(
-        uint256 _blocksPerQuarter,
-        uint256 _originBlock,
-        uint256 _claimPeriod
-    ) external onlyOwner {
+    function updateRewardsContract() external onlyOwner {
         require(deployed, "Contracts must be deployed first.");
 
         // Deploy a new DaovidendRewards contract with the same configuration.
