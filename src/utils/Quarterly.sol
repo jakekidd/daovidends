@@ -22,7 +22,7 @@ abstract contract Quarterly {
      * @return start The start block of the current quarter.
      * @return end The end block of the current quarter.
      */
-    function _getCurrentQuarter() internal view returns (uint256 current, uint256 start, uint256 end) {
+    function getCurrentQuarter() public view returns (uint256 current, uint256 start, uint256 end) {
         current = ((block.number - ORIGIN_BLOCK) / BLOCKS_PER_QUARTER) + 1;
         start = ORIGIN_BLOCK + (current - 1) * BLOCKS_PER_QUARTER;
         end = start + BLOCKS_PER_QUARTER;

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.23;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IDaovidendRewards} from "../interfaces/IDaovidendRewards.sol";
 
 /**
  * @title DaovidendRewards
@@ -10,7 +11,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * ensures that rewards are distributed according to the instructions received from the Daovidends contract.
  * @dev NOTE: Missing support for ETH contributions to the reward pool.
  */
-contract DaovidendRewards {
+contract DaovidendRewards is IDaovidendRewards {
     address public immutable CONTROLLER;
     address public immutable DAOVIDENDS;
 

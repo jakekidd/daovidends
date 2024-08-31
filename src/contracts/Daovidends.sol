@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.23;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "../utils/Quarterly.sol";
-import "./DaovidendRewards.sol";
+import {Quarterly} from "../utils/Quarterly.sol";
+import {IDaovidendRewards} from "../interfaces/IDaovidendRewards.sol";
 
 /**
  * @title Daovidends
@@ -37,7 +37,7 @@ contract Daovidends is Quarterly, Ownable {
     /// @notice Maps each user's address to their staking information.
     mapping(address => Stake) public stakers;
 
-    DaovidendRewards public rewardsContract;
+    IDaovidendRewards public rewardsContract;
 
     error InvalidStakeAmount(); // Error for invalid staking amounts
     error InvalidUnstakeAmount();
@@ -61,19 +61,10 @@ contract Daovidends is Quarterly, Ownable {
     }
 
     /**
-     * @notice Modifier to check if the claim period is active for the current quarter.
-     */
-    modifier claimPeriodActive() {
-        (, , uint256 quarterEndBlock) = _getCurrentQuarter();
-        if (block.number > quarterEndBlock - (BLOCKS_PER_QUARTER / 2)) revert ClaimPeriodHasEnded();
-        _;
-    }
-
-    /**
      * @notice Allows the owner to set the rewards contract address.
      * @param _rewardsContract The address of the deployed DaovidendRewards contract.
      */
-    function setRewardsContract(DaovidendRewards _rewardsContract) external onlyOwner {
+    function setRewardsContract(IDaovidendRewards _rewardsContract) external onlyOwner {
         rewardsContract = _rewardsContract;
         emit RewardsContractUpdated(address(_rewardsContract));
     }
@@ -85,7 +76,7 @@ contract Daovidends is Quarterly, Ownable {
     function stake(uint256 amount) external {
         if (amount == 0) revert InvalidStakeAmount();
 
-        (uint256 currentQuarter, uint256 quarterStartBlock, uint256 quarterEndBlock) = _getCurrentQuarter();
+        (uint256 currentQuarter, uint256 quarterStartBlock, uint256 quarterEndBlock) = getCurrentQuarter();
 
         // Ensure projected total credits are set for the current quarter.
         if (projectedTotalCredits[currentQuarter] == 0) {
@@ -121,7 +112,7 @@ contract Daovidends is Quarterly, Ownable {
     function unstake(uint256 amount) external {
         if (amount == 0 || amount > stakers[msg.sender].amount) revert InvalidUnstakeAmount();
 
-        (uint256 currentQuarter, uint256 quarterStartBlock, uint256 quarterEndBlock) = _getCurrentQuarter();
+        (uint256 currentQuarter, uint256 quarterStartBlock, uint256 quarterEndBlock) = getCurrentQuarter();
 
         _update(msg.sender, currentQuarter, quarterStartBlock);
 
@@ -151,11 +142,12 @@ contract Daovidends is Quarterly, Ownable {
     /**
      * @notice Claim rewards for the current quarter.
      */
-    function claim() external claimPeriodActive {
+    function claim() external {
         if (address(rewardsContract) == address(0)) revert RewardsContractNotSet();
 
-        (uint256 currentQuarter, uint256 quarterStartBlock, ) = _getCurrentQuarter();
+        (uint256 currentQuarter, uint256 quarterStartBlock, uint256 quarterEndBlock) = getCurrentQuarter();
 
+        if (block.number > quarterEndBlock - (BLOCKS_PER_QUARTER / 2)) revert ClaimPeriodHasEnded();
         if (claims[msg.sender][currentQuarter]) revert RewardsAlreadyClaimed();
 
         _update(msg.sender, currentQuarter, quarterStartBlock);
@@ -174,7 +166,7 @@ contract Daovidends is Quarterly, Ownable {
      * @notice Roll over unclaimed tokens from the previous quarter to the current quarter's pool.
      */
     function rollover() external {
-        (uint256 currentQuarter, , ) = _getCurrentQuarter();
+        (uint256 currentQuarter, , ) = getCurrentQuarter();
         uint256 previousQuarter = currentQuarter - 1;
 
         rewardsContract.rollover(currentQuarter, previousQuarter);

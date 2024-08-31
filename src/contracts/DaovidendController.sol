@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.23;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "./Daovidends.sol";
-import "./DaovidendRewards.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Daovidends} from "./Daovidends.sol";
+import {DaovidendRewards} from "./DaovidendRewards.sol";
 
 /**
  * @title DaovidendController
@@ -24,7 +25,7 @@ contract DaovidendController is Ownable {
         address indexed oldRewardsContract,
         address indexed newRewardsContract
     );
-    event TokenAllowlistUpdated(address indexed rewardsContract, IERC20 indexed token, bool allowed);
+    event TokenAllowlistUpdated(address indexed rewardsContract, address indexed token, bool allowed);
 
     constructor(address _dao) Ownable(_dao) {}
 
@@ -99,6 +100,6 @@ contract DaovidendController is Ownable {
      */
     function updateTokenAllowlist(IERC20 token, bool allowed) external onlyOwner {
         rewards.updateTokenAllowlist(token, allowed);
-        emit TokenAllowlistUpdated(address(rewards), token, allowed);
+        emit TokenAllowlistUpdated(address(rewards), address(token), allowed);
     }
 }
